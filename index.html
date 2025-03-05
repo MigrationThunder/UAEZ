@@ -37,7 +37,7 @@
   <h1>BTC 뉴스 감정 분석 및 모의 자동 매매</h1>
   
   <div class="section" id="news-section">
-    <h2>최신 뉴스</h2>
+    <h2>최신 뉴스 (Reuters Business News)</h2>
     <div id="news-list">뉴스 로딩 중...</div>
   </div>
   
@@ -141,12 +141,12 @@
     };
     
     // -----------------------------
-    // 5. 실제 뉴스 데이터 가져오기 (CoinDesk RSS 피드 활용)
+    // 5. 실제 뉴스 데이터 가져오기 (Reuters Business News RSS 피드 활용)
     // -----------------------------
     async function fetchNews() {
-      // RSS 피드 URL (CoinDesk)
-      const feedUrl = "http://feeds.feedburner.com/CoinDesk";
-      // AllOrigins 프록시 사용 (API 키 없이 무료로 사용 가능)
+      // Reuters Business News RSS 피드 URL
+      const feedUrl = "http://feeds.reuters.com/reuters/businessNews";
+      // AllOrigins 프록시 (무료, API 키 불필요)
       const proxyUrl = "https://api.allorigins.hexocode.repl.co/get?disableCache=true&url=" + encodeURIComponent(feedUrl);
       
       try {
@@ -270,3 +270,4 @@
   </script>
 </body>
 </html>
+
