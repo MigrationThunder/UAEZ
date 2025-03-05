@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BTC 뉴스 감정 분석 및 모의 자동 매매</title>
+  <style>
+    body {
+      background-color: #121212;
+      color: #ffffff;
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+    }
+    h1, h2 { color: #00bcd4; }
+    .section {
+      margin-bottom: 30px;
+      background-color: #1e1e1e;
+      padding: 15px;
+      border-radius: 8px;
+    }
+    .news-item { margin-bottom: 15px; }
+    .sentiment-positive { color: #4caf50; }
+    .sentiment-negative { color: #f44336; }
+    .sentiment-neutral { color: #ffeb3b; }
+    #price, #balance, #btc-holdings, #profit, #ma { font-size: 1.5em; }
+    #trades p { margin: 5px 0; }
+    @media (max-width: 600px) {
+      body { padding: 10px; }
+      h1 { font-size: 1.5em; }
+      h2 { font-size: 1.2em; }
+      #price, #balance, #btc-holdings, #profit, #ma { font-size: 1.2em; }
+    }
+  </style>
+</head>
+<body>
+  <h1>BTC 뉴스 감정 분석 및 모의 자동 매매</h1>
+  
+  <div class="section" id="news-section">
+    <h2>최신 뉴스</h2>
+    <div id="news-list">뉴스 로딩 중...</div>
+  </div>
+  
+  <div class="section" id="market-section">
+    <h2>현재 시장 가격</h2>
+    <p id="price">로딩 중...</p>
+    <p id="ma">단기 이동평균: 계산 중...</p>
+  </div>
+  
+  <div class="section" id="account-section">
+    <h2>모의 계좌</h2>
+    <p id="balance">자본: 100.00 USDT</p>
+    <p id="btc-holdings">보유 BTC: 0.000000 BTC</p>
+    <p id="profit">수익: 0.00 USDT (0.00%)</p>
+  </div>
+  
+  <div class="section" id="trades-section">
+    <h2>최근 매매 내역</h2>
+    <div id="trades"></div>
+  </div>
+  
+  <script>
+    // --------------------------------------------------
+    // 1. 감정 분석 함수 (긍정/부정/중립)
+    // --------------------------------------------------
+    function analyzeSentiment(text) {
+      const positiveWords = ['soaring', 'surged', 'stable', 'stability', 'good', 'great', 'excellent', '상승', '안정'];
+      const negativeWords = ['crashes', 'plummeted', 'bad', 'terrible', 'decline', '하락', '붕괴'];
+      const words = text.toLowerCase().split(/\s+/);
+      let positiveCount = 0, negativeCount = 0;
+      words.forEach(word => {
+        if (positiveWords.includes(word)) positiveCount++;
+        if (negativeWords.includes(word)) negativeCount++;
+      });
+      if (positiveCount > negativeCount) return 'positive';
+      else if (negativeCount > positiveCount) return 'negative';
+      else return 'neutral';
+    }
+    
+    // --------------------------------------------------
+    // 2. 모의 계좌 및 거래 관련 변수
+    // --------------------------------------------------
+    let balance = 100.00;       // 초기 자본 (USDT)
+    let btcHoldings = 0;        // 보유 BTC
+    let totalProfit = 0;        // 누적 수익
+    let entryPrice = 0;         // 진입 가격
+    const stopLossPercent = 0.03;   // 3% 손절
+    const takeProfitPercent = 0.05; // 5% 익절
+    
+    // --------------------------------------------------
+    // 3. 기술적 지표: 단기 이동평균 계산
+    // --------------------------------------------------
+    const priceHistory = [];
+    const movingAvgPeriod = 20; // 최근 20개 가격으로 이동평균 계산
+    
+    function updatePriceHistory(price) {
+      priceHistory.push(price);
+      if (priceHistory.length > movingAvgPeriod) {
+        priceHistory.shift();
+      }
+    }
+    
+    function calculateMovingAverage() {
+      if (priceHistory.length === 0) return 0;
+      const sum = priceHistory.reduce((a, b) => a + b, 0);
+      return sum / priceHistory.length;
+    }
+    
+    // --------------------------------------------------
+    // 4. 바이낸스 웹소켓을 통한 실시간 가격 업데이트
+    // --------------------------------------------------
+    const socket = new WebSocket('wss://fstream.binance.com/ws/btcusdt@markPrice');
+    let currentPrice = 0;
+    
+    socket.onmessage = function(event) {
+      const data = JSON.parse(event.data);
+      currentPrice = parseFloat(data.p);
+      document.getElementById('price').textContent = `${currentPrice.toFixed(2)} USDT`;
+      
+      // 가격 히스토리 업데이트 및 이동평균 계산
+      updatePriceHistory(currentPrice);
+      const movingAvg = calculateMovingAverage();
+      document.getElementById('ma').textContent = `단기 이동평균: ${movingAvg.toFixed(2)} USDT`;
+      
+      // 포지션 보유 시 손절/익절 조건 확인
+      if (btcHoldings > 0) {
+        if (currentPrice <= entryPrice * (1 - stopLossPercent)) {
+          addTradeLog(`STOP LOSS triggered. SELL ${btcHoldings.toFixed(6)} BTC at ${currentPrice.toFixed(2)} USDT`);
+          closePosition();
+          return;
+        }
+        if (currentPrice >= entryPrice * (1 + takeProfitPercent)) {
+          addTradeLog(`TAKE PROFIT triggered. SELL ${btcHoldings.toFixed(6)} BTC at ${currentPrice.toFixed(2)} USDT`);
+          closePosition();
+          return;
+        }
+        const profit = (currentPrice - entryPrice) * btcHoldings;
+        const profitRate = ((currentPrice - entryPrice) / entryPrice) * 100;
+        document.getElementById('profit').textContent = `수익: ${profit.toFixed(2)} USDT (${profitRate.toFixed(2)}%)`;
+      }
+    };
+    
+    // --------------------------------------------------
+    // 5. 실제 뉴스 데이터 가져오기 (CoinDesk RSS 피드 활용)
+    // --------------------------------------------------
+    async function fetchNews() {
+      // RSS 피드 URL (CoinDesk)
+      const feedUrl = "http://feeds.feedburner.com/CoinDesk";
+      // 무료 CORS 프록시(ThingProxy) 사용
+      const url = `https://thingproxy.freeboard.io/fetch/${feedUrl}`;
+      try {
+        const response = await fetch(url);
+        const contents = await response.text();
+        
+        // XML 파싱
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(contents, "text/xml");
+        const items = xmlDoc.getElementsByTagName("item");
+        const news = [];
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          const title = item.getElementsByTagName("title")[0].textContent;
+          const descriptionNode = item.getElementsByTagName("description")[0];
+          const description = descriptionNode ? descriptionNode.textContent : "";
+          news.push({ title, description });
+        }
+        
+        // 감정 분석 및 뉴스 리스트 업데이트
+        const sentiments = news.map(item => {
+          const text = item.title + ' ' + item.description;
+          return analyzeSentiment(text);
+        });
+        const newsList = document.getElementById('news-list');
+        newsList.innerHTML = '';
+        news.forEach((item, index) => {
+          const div = document.createElement('div');
+          div.className = 'news-item';
+          div.innerHTML = `
+            <p>${item.title}</p>
+            <p class="sentiment-${sentiments[index]}">
+              감정: ${sentiments[index] === 'positive' ? '긍정' : sentiments[index] === 'negative' ? '부정' : '중립'}
+            </p>
+          `;
+          newsList.appendChild(div);
+        });
+        
+        // 전체 뉴스 감정 점수 산출 (긍정=+1, 부정=-1, 중립=0)
+        const scores = sentiments.map(s => s === 'positive' ? 1 : s === 'negative' ? -1 : 0);
+        const sentimentScore = scores.reduce((a, b) => a + b, 0) / scores.length;
+        
+        // 거래 로직 실행 (기술적 지표와 뉴스 감정 결합)
+        executeTradingLogic(sentimentScore);
+      } catch (error) {
+        console.error("뉴스 피드 가져오기 에러:", error);
+      }
+    }
+    
+    // --------------------------------------------------
+    // 6. 거래 실행 로직: 뉴스 감정과 이동평균 기반 판단 및 리스크 관리
+    // --------------------------------------------------
+    function executeTradingLogic(sentimentScore) {
+      const movingAvg = calculateMovingAverage();
+      // 조건: 강한 긍정 감정, 현재가 > 이동평균, 포지션 미보유 시 매수
+      if (sentimentScore > 0.5 && currentPrice > movingAvg && btcHoldings === 0) {
+        openPosition();
+      }
+      // 조건: 강한 부정 감정, 현재가 < 이동평균, 포지션 보유 시 매도
+      if (sentimentScore < -0.5 && currentPrice < movingAvg && btcHoldings > 0) {
+        closePosition();
+      }
+    }
+    
+    // --------------------------------------------------
+    // 7. 매수 함수 (자본의 일정 비율 투자)
+    // --------------------------------------------------
+    function openPosition() {
+      const tradeValue = balance * 0.1;  // 투자금액: 자본의 10%
+      const btcAmount = tradeValue / currentPrice;
+      balance -= tradeValue;
+      btcHoldings += btcAmount;
+      entryPrice = currentPrice;
+      updateAccount();
+      addTradeLog(`BUY ${btcAmount.toFixed(6)} BTC at ${currentPrice.toFixed(2)} USDT`);
+    }
+    
+    // --------------------------------------------------
+    // 8. 매도 함수 (보유 BTC 전량 매도)
+    // --------------------------------------------------
+    function closePosition() {
+      if (btcHoldings === 0) return;
+      const tradeValue = btcHoldings * currentPrice;
+      const profit = (currentPrice - entryPrice) * btcHoldings;
+      balance += tradeValue;
+      totalProfit += profit;
+      addTradeLog(`SELL ${btcHoldings.toFixed(6)} BTC at ${currentPrice.toFixed(2)} USDT, Profit: ${profit.toFixed(2)} USDT`);
+      btcHoldings = 0;
+      updateAccount();
+    }
+    
+    // --------------------------------------------------
+    // 9. 계좌 정보 및 매매 내역 업데이트 함수
+    // --------------------------------------------------
+    function updateAccount() {
+      document.getElementById('balance').textContent = `자본: ${balance.toFixed(2)} USDT`;
+      document.getElementById('btc-holdings').textContent = `보유 BTC: ${btcHoldings.toFixed(6)} BTC`;
+      if (btcHoldings === 0) {
+        document.getElementById('profit').textContent = `수익: 0.00 USDT (0.00%)`;
+      }
+    }
+    
+    function addTradeLog(message) {
+      const trades = document.getElementById('trades');
+      const p = document.createElement('p');
+      p.textContent = `${message} - ${new Date().toLocaleTimeString()}`;
+      trades.prepend(p);
+      if (trades.children.length > 10) {
+        trades.removeChild(trades.lastChild);
+      }
+    }
+    
+    // --------------------------------------------------
+    // 10. 초기 실행: 뉴스 데이터 주기적 업데이트 (1분마다)
+    // --------------------------------------------------
+    window.onload = function() {
+      fetchNews();
+      setInterval(fetchNews, 60000);
+    };
+  </script>
+</body>
+</html>
+
+
