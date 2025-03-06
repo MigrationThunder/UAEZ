@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BTC 뉴스 감정 분석 및 모의 자동 매매</title>
+  <title>BTC 뉴스 감정 분석 및 모의 자동 매매 - BBC Business News</title>
   <style>
     body {
       background-color: #121212;
@@ -37,7 +37,7 @@
   <h1>BTC 뉴스 감정 분석 및 모의 자동 매매</h1>
   
   <div class="section" id="news-section">
-    <h2>최신 뉴스 (Reuters Business News)</h2>
+    <h2>최신 뉴스 (BBC Business News)</h2>
     <div id="news-list">뉴스 로딩 중...</div>
   </div>
   
@@ -64,6 +64,7 @@
     // 1. 감정 분석 함수 (긍정/부정/중립)
     // -----------------------------
     function analyzeSentiment(text) {
+      // 긍정 및 부정 단어 목록 (간단한 예제)
       const positiveWords = ['soaring', 'surged', 'stable', 'stability', 'good', 'great', 'excellent', '상승', '안정'];
       const negativeWords = ['crashes', 'plummeted', 'bad', 'terrible', 'decline', '하락', '붕괴'];
       const words = text.toLowerCase().split(/\s+/);
@@ -141,11 +142,11 @@
     };
     
     // -----------------------------
-    // 5. 실제 뉴스 데이터 가져오기 (Reuters Business News RSS 피드 활용)
+    // 5. 실제 뉴스 데이터 가져오기 (BBC Business News RSS 피드 활용)
     // -----------------------------
     async function fetchNews() {
-      // Reuters Business News RSS 피드 URL
-      const feedUrl = "http://feeds.reuters.com/reuters/businessNews";
+      // BBC Business News RSS 피드 URL
+      const feedUrl = "http://feeds.bbci.co.uk/news/business/rss.xml";
       // AllOrigins 프록시 (무료, API 키 불필요)
       const proxyUrl = "https://api.allorigins.hexocode.repl.co/get?disableCache=true&url=" + encodeURIComponent(feedUrl);
       
@@ -270,4 +271,3 @@
   </script>
 </body>
 </html>
-
